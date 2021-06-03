@@ -1,4 +1,5 @@
 import logging
+import asyncio
 import random
 import json
 from datetime import datetime
@@ -12,27 +13,15 @@ class ChargePoint(cp):
         cp.__init__(self,  _id, connection)
         self.status = ChargePointStatus.available
         self.transaction_id = None
-        self.update_db()
 
-    #dummy database showing all connected chargepoints and their status
-    def update_db(self):
-        with open('db.json') as json_file:
-            db = json.load(json_file)
-            db[self.id] = {
-                "status": self.status
-            }
-        with open('db.json', 'w') as json_file:
-            json.dump(db, json_file)
-
-    #Start charging after authorization
-    #usually triggerd by app or webb remotely
-    @after(Action.Authorize)
-    async def remote_start_transaction(self, id_tag):
+    #could be triggerd by app or webb remotely
+    def remote_start_transaction(self, id_tag:str):
         """
         Tell chargepoint to start a transaction with the given id_tag.
         """
         payload = call.RemoteStartTransactionPayload(id_tag = id_tag )
-        await self.call(payload)
+        loop = asyncio.get_running_loop()
+        self.call(payload)
 
 
     @on(Action.Authorize)
@@ -44,6 +33,7 @@ class ChargePoint(cp):
         tag_info =  {
             "status": AuthorizationStatus.accepted
         }
+        print("Authorizing: "+ id_tag)
         return call_result.AuthorizePayload(
             id_tag_info = tag_info
         )
@@ -73,19 +63,20 @@ class ChargePoint(cp):
             "status": status
         }
         self.transaction_id = random.randint(1,1000)
-        self.meter_start
+        print("Charging Started")
         return call_result.StartTransactionPayload(
             id_tag_info    = tag_info,
             transaction_id = self.transaction_id
         )
 
+    #example use of after decorator
     @after(Action.StartTransaction)
     def after_start_transaction(self, connector_id: int, id_tag: int, meter_start:int, reservation_id:int , timestamp:datetime):
         """
         updates charger status and database afer a transaction has been started
         """
         self.status = ChargePointStatus.charging 
-        self.update_db()
+
 
 
     @on(Action.StopTransaction)
@@ -101,8 +92,6 @@ class ChargePoint(cp):
             "status": status
         }
         self.status = ChargePointStatus.available
-        self.transaction_id = None
-        self.update_db()
         return call_result.StopTransactionPayload(
             id_tag_info    = tag_info,
         )
