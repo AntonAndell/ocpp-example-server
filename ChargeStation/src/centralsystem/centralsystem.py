@@ -33,30 +33,26 @@ class CentralSystem:
         try:
             await cp.start()
         except Exception as e:
-            print(f"Charger {cp.id} disconnected: {e}")
+            print(f"Charger {cp.id} disconnected: {repr(e)}")
         finally:
             # Make sure to remove reference to charger after it disconnected.
             del self._chargers[cp]
-
+            
             # This will unblock the `on_connect()` handler and the connection
             # will be destroyed.
             await queue.put(True)
  
-
-
-    def start_charge(self, id:str, tag:str):
+    async def start_transaction(self, id:str, tag:str):
         cp, _  = self._get_cp(id)
-        cp.remote_start_transaction(tag)
+        await cp.remote_start_transaction(tag)
 
     def disconnect_charger(self, id: str):
         _, task = self._get_cp(id)
         task.cancel()
 
-
     def _get_cp(self, id):
         for cp, task in self._chargers.items():
             if cp.id == id:
-                task.cancel()
                 return cp, task
 
         raise ValueError(f"Charger {id} not connected.")

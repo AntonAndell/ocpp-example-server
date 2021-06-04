@@ -14,26 +14,24 @@ class ChargePoint(cp):
         self.status = ChargePointStatus.available
         self.transaction_id = None
 
-    #could be triggerd by app or webb remotely
-    def remote_start_transaction(self, id_tag:str):
+    #triggerd by http server remotely
+    async def remote_start_transaction(self, id_tag:str):
         """
         Tell chargepoint to start a transaction with the given id_tag.
         """
         payload = call.RemoteStartTransactionPayload(id_tag = id_tag )
-        loop = asyncio.get_running_loop()
-        self.call(payload)
-
+        await self.call(payload)
 
     @on(Action.Authorize)
     def on_authorize(self, id_tag:str, **kwargs):
         """
-        verifies a tag and responds with a status
+        Verifies a tag and responds with a status
         """
-        #Verify id_tag
         tag_info =  {
             "status": AuthorizationStatus.accepted
         }
-        print("Authorizing: "+ id_tag)
+        print(f"Charger {self.id}: Authorized with {id_tag}")
+
         return call_result.AuthorizePayload(
             id_tag_info = tag_info
         )
@@ -41,29 +39,31 @@ class ChargePoint(cp):
     @on(Action.BootNotification)
     def on_boot_notification(self, charge_point_vendor: str, charge_point_model: str, **kwargs):
         """
-        init message beteween server and chargepoint
+        Init message beteween server and chargepoint
         """
         return call_result.BootNotificationPayload(
             current_time =datetime.utcnow().isoformat(),
             interval     =10,
             status       =RegistrationStatus.accepted
         )
+
     @on(Action.StartTransaction)
     def on_start_transaction(self, connector_id: int, id_tag: int, meter_start:int, reservation_id:int , timestamp:datetime):
         """
-        if chargepoint is avaiable and the tag is correct/authorized start charging/transacting 
+        If chargepoint is avaiable and the tag is correct/authorized start charging/transacting 
         """
         if self.status != ChargePointStatus.available:
             status = AuthorizationStatus.blocked
             
         else:
             status = AuthorizationStatus.accepted
+            print(f"Charger {self.id}: Charging Started")
 
         tag_info =  {
             "status": status
         }
         self.transaction_id = random.randint(1,1000)
-        print("Charging Started")
+        
         return call_result.StartTransactionPayload(
             id_tag_info    = tag_info,
             transaction_id = self.transaction_id
@@ -77,8 +77,6 @@ class ChargePoint(cp):
         """
         self.status = ChargePointStatus.charging 
 
-
-
     @on(Action.StopTransaction)
     def on_stop_transaction(self, id_tag: int, meter_stop:int , timestamp:datetime, transaction_id:int):
         """
@@ -88,6 +86,7 @@ class ChargePoint(cp):
             status = AuthorizationStatus.invalid
         else:
             status = AuthorizationStatus.accepted
+            print(f"Charger {self.id}: Charging Stopped")
         tag_info =  {
             "status": status
         }
@@ -95,7 +94,6 @@ class ChargePoint(cp):
         return call_result.StopTransactionPayload(
             id_tag_info    = tag_info,
         )
-
         
     @on(Action.Heartbeat)
     def on_heartbeat(self):

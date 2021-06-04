@@ -14,14 +14,14 @@ async def hello(request):
     return web.Response(text="hello world")
 
 async def start_charge(request):
-    """ HTTP handler for remotely start chargring session. """
+    """ HTTP handler for remotely starting a chargring session. """
     data = await request.json()
     csms = request.app["csms"]
 
     try:
-        csms.start_charge(data["id"], data["tag"])
+        await csms.start_transaction(data["id"], data["tag"])
     except ValueError as e:
-        print(f"Failed to connect charger: {e}")
+        print(f"Failed to start transaction: {e}")
         return web.Response(status=404)
 
     return web.Response()
@@ -39,9 +39,9 @@ async def disconnect_charger(request):
 
     return web.Response()
 
-
 async def create_http_server(csms: CentralSystem):
     app = web.Application()
+    #Also possible to use decorators instead
     app.add_routes([web.get("/", hello)])
     app.add_routes([web.post("/disconnect", disconnect_charger)])
     app.add_routes([web.post("/startcharge", start_charge)])
